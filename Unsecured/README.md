@@ -31,8 +31,9 @@ dotnet run --project DailyGroove.Sync.Api.Tests -- -class DailyGroove.Sync.Api.T
 (`dotnet test` is not used — see project notes on the .NET 10 SDK.)
 
 ## Deliberate vulnerabilities
-Each has an exploit in `AttackTests.cs` that **passes while the flaw exists**. In the secured copy
-the same tests are inverted into regression tests proving the attack fails.
+Each has an exploit in `AttackTests.cs` that asserts the *protected* behaviour, so it is **red while
+the flaw exists** and turns green only once the protection is in place (then it stays as a regression
+test). Run one stage at a time with `-- -trait "Stage=2-Authentication"`.
 
 | # | Flaw | OWASP API Top 10 (2023) |
 |---|---|---|
