@@ -83,14 +83,18 @@ public class PushResponse
     /// <summary>Number of records ignored because the server copy was newer.</summary>
     public int Ignored { get; set; }
 
-    /// <summary>Highest server version for this user after the push; use as the next pull cursor.</summary>
-    public long Cursor { get; set; }
+    // Deliberately no cursor here: the client keeps its own pull cursor, otherwise adopting a
+    // push-time cursor could skip changes another device made since the client's last pull.
 }
 
 /// <summary>GET /sync/pull response: everything changed after the supplied cursor.</summary>
 public class PullResponse
 {
+    /// <summary>Resume point: pass as <c>since</c> on the next pull.</summary>
     public long Cursor { get; set; }
+
+    /// <summary>True when more changes remain; pull again from <see cref="Cursor"/>.</summary>
+    public bool HasMore { get; set; }
     public List<ExerciseDto> Exercises { get; set; } = [];
     public List<SessionRecordDto> SessionRecords { get; set; } = [];
     public List<ActivityResultDto> ActivityResults { get; set; } = [];

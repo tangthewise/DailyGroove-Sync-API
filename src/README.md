@@ -1,8 +1,10 @@
-# DailyGroove Sync API — Unsecured Baseline
+# DailyGroove Sync API
 
-> ## ⚠️ DELIBERATELY VULNERABLE — DO NOT DEPLOY
-> This API is intentionally insecure so each flaw can be exploited, documented and then fixed
-> in the secured copy. **Never run it on a public network or with real data.** The password in
+> ## ⚠️ DELIBERATELY VULNERABLE UNTIL HARDENED — DO NOT DEPLOY
+> This API started as an intentionally insecure baseline so each flaw can be exploited, documented
+> and then fixed **in place**, one stage at a time (see `../SECURITY-JOURNEY.md`; each stage's
+> end state is a git tag, starting with `stage-0-baseline`). **Never run it on a public network
+> or with real data** until the journey says the relevant stages are done. The password in
 > `appsettings.json` is a fake placeholder for demonstration.
 
 A local-first sync API for Daily Groove: ASP.NET Core minimal API (.NET 10), EF Core + SQL Server.
@@ -17,7 +19,10 @@ A local-first sync API for Daily Groove: ASP.NET Core minimal API (.NET 10), EF 
 ## Sync model
 - Client-generated GUID ids on every record.
 - Synced in the first pass: `Exercise`, `SessionRecord`, `ActivityResult`.
-- Pull cursor = SQL Server `rowversion` (exposed as a `long`).
+- Pull cursor = SQL Server `rowversion` (exposed as a `long`). Pulls are capped below
+  `MIN_ACTIVE_ROWVERSION()` so a slow transaction can't be skipped, and are paged (`limit`, default and max
+  500; keep pulling from the returned `cursor` while `hasMore` is true). Push returns no cursor — the client
+  keeps its own.
 - Soft deletes (`IsDeleted` tombstones) so deletions propagate.
 - Last-write-wins on `UpdatedAtUtc`.
 
@@ -33,7 +38,7 @@ dotnet run --project DailyGroove.Sync.Api.Tests -- -class DailyGroove.Sync.Api.T
 ## Deliberate vulnerabilities
 Each has an exploit in `AttackTests.cs` that asserts the *protected* behaviour, so it is **red while
 the flaw exists** and turns green only once the protection is in place (then it stays as a regression
-test). Run one stage at a time with `-- -trait "Stage=2-Authentication"`.
+test). Run one stage at a time with `-- -trait "Stage=Authentication"`.
 
 | # | Flaw | OWASP API Top 10 (2023) |
 |---|---|---|

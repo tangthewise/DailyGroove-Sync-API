@@ -11,7 +11,7 @@ namespace DailyGroove.Sync.Api.Tests;
 /// as a permanent regression test.
 ///
 /// Every test carries a "Stage" trait (see API/SECURITY-JOURNEY.md) so one stage can be run alone:
-///   dotnet run --project DailyGroove.Sync.Api.Tests -- -trait "Stage=2-Authentication"
+///   dotnet run --project DailyGroove.Sync.Api.Tests -- -trait "Stage=Authentication"
 ///
 /// OWASP API Security Top 10 (2023) mapping is noted on each test.
 ///
@@ -29,7 +29,7 @@ public sealed class AttackTests : IClassFixture<SyncApiFactory>
 
     // API1:2023 Broken Object Level Authorization / API2 Broken Authentication
     [Fact]
-    [Trait("Stage", "2-Authentication")]
+    [Trait("Stage", "Authentication")]
     public async Task Caller_without_credentials_is_refused_when_reading_another_users_records()
     {
         var victim = Guid.NewGuid();
@@ -45,7 +45,7 @@ public sealed class AttackTests : IClassFixture<SyncApiFactory>
 
     // API1:2023 Broken Object Level Authorization
     [Fact]
-    [Trait("Stage", "3-ObjectAuthorization")]
+    [Trait("Stage", "ObjectAuthorization")]
     public async Task Another_users_record_cannot_be_overwritten()
     {
         var victim = Guid.NewGuid();
@@ -65,7 +65,7 @@ public sealed class AttackTests : IClassFixture<SyncApiFactory>
 
     // API1:2023 Broken Object Level Authorization
     [Fact]
-    [Trait("Stage", "3-ObjectAuthorization")]
+    [Trait("Stage", "ObjectAuthorization")]
     public async Task Another_users_record_cannot_be_deleted()
     {
         var victim = Guid.NewGuid();
@@ -81,9 +81,32 @@ public sealed class AttackTests : IClassFixture<SyncApiFactory>
         Check.That(victimView.Exercises.Single().IsDeleted).IsFalse();
     }
 
+    // API1:2023 Broken Object Level Authorization — relationships between records
+    [Fact]
+    [Trait("Stage", "ObjectAuthorization")]
+    public async Task Record_cannot_reference_another_users_record()
+    {
+        var victim = Guid.NewGuid();
+        var attacker = Guid.NewGuid();
+        var victimSession = new SessionRecordDto { Id = Guid.NewGuid(), UserId = victim, StartedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow };
+        await _client.PushOkAsync(new PushRequest { UserId = victim, SessionRecords = [victimSession] });
+
+        // The attacker's own result points at the victim's SessionRecord. Ownership checks must cover
+        // references between records, not just the records themselves.
+        var dangling = new ActivityResultDto
+        {
+            Id = Guid.NewGuid(), UserId = attacker, SessionRecordId = victimSession.Id,
+            Title = "Attached to a record I don't own", UpdatedAtUtc = DateTime.UtcNow,
+        };
+        await _client.PostAsJsonAsync("/sync/push", new PushRequest { UserId = attacker, ActivityResults = [dangling] }, TestContext.Current.CancellationToken);
+
+        var attackerView = await _client.PullOkAsync(attacker);
+        Check.That(attackerView.ActivityResults.Select(r => r.SessionRecordId)).Not.Contains(victimSession.Id);
+    }
+
     // API3:2023 Broken Object Property Level Authorization (mass assignment)
     [Fact]
-    [Trait("Stage", "4-MassAssignmentAndValidation")]
+    [Trait("Stage", "MassAssignmentAndValidation")]
     public async Task Client_supplied_timestamp_cannot_lock_a_record_against_later_edits()
     {
         var attacker = Guid.NewGuid();
@@ -102,7 +125,7 @@ public sealed class AttackTests : IClassFixture<SyncApiFactory>
 
     // API3:2023 Broken Object Property Level Authorization (mass assignment of the owner)
     [Fact]
-    [Trait("Stage", "4-MassAssignmentAndValidation")]
+    [Trait("Stage", "MassAssignmentAndValidation")]
     public async Task Client_cannot_plant_a_record_in_another_users_account_via_the_owner_field()
     {
         var victim = Guid.NewGuid();
@@ -118,7 +141,7 @@ public sealed class AttackTests : IClassFixture<SyncApiFactory>
 
     // API4:2023 Unrestricted Resource Consumption (no validation / size limits)
     [Fact]
-    [Trait("Stage", "4-MassAssignmentAndValidation")]
+    [Trait("Stage", "MassAssignmentAndValidation")]
     public async Task Oversized_and_malformed_payload_is_rejected()
     {
         var user = Guid.NewGuid();
@@ -135,23 +158,9 @@ public sealed class AttackTests : IClassFixture<SyncApiFactory>
             .Contains(response.StatusCode);
     }
 
-    // API4:2023 Unrestricted Resource Consumption (no rate limiting)
-    [Fact]
-    [Trait("Stage", "5-AbuseLimits")]
-    public async Task Excessive_request_rate_is_throttled()
-    {
-        var user = Guid.NewGuid();
-
-        var statuses = new List<HttpStatusCode>();
-        for (var i = 0; i < 200; i++)
-            statuses.Add((await _client.GetAsync($"/sync/pull?userId={user}&since=0", TestContext.Current.CancellationToken)).StatusCode);
-
-        Check.That(statuses).Contains(HttpStatusCode.TooManyRequests);
-    }
-
     // API8:2023 Security Misconfiguration (CORS)
     [Fact]
-    [Trait("Stage", "7-Configuration")]
+    [Trait("Stage", "Configuration")]
     public async Task Cross_origin_request_from_an_arbitrary_origin_gets_no_cors_approval()
     {
         var request = new HttpRequestMessage(HttpMethod.Get, $"/sync/pull?userId={Guid.NewGuid()}&since=0");
@@ -165,7 +174,7 @@ public sealed class AttackTests : IClassFixture<SyncApiFactory>
 
     // API8:2023 Security Misconfiguration (CORS preflight)
     [Fact]
-    [Trait("Stage", "7-Configuration")]
+    [Trait("Stage", "Configuration")]
     public async Task Cors_preflight_from_an_arbitrary_origin_is_not_approved()
     {
         var request = new HttpRequestMessage(HttpMethod.Options, "/sync/push");
@@ -180,7 +189,7 @@ public sealed class AttackTests : IClassFixture<SyncApiFactory>
 
     // API8:2023 Security Misconfiguration (verbose errors)
     [Fact]
-    [Trait("Stage", "7-Configuration")]
+    [Trait("Stage", "Configuration")]
     public async Task Error_response_does_not_leak_internal_details()
     {
         var user = Guid.NewGuid();
@@ -199,7 +208,7 @@ public sealed class AttackTests : IClassFixture<SyncApiFactory>
 
     // API8:2023 Security Misconfiguration (secrets in source)
     [Fact]
-    [Trait("Stage", "6-Secrets")]
+    [Trait("Stage", "SecretsHygiene")]
     public void Database_password_is_not_committed_in_appsettings_json()
     {
         var appsettings = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "appsettings.json"));

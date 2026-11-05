@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/Claude/">
+    <File Path="../SECURITY-JOURNEY.md" />
+  </Folder>
   <Project Path="DailyGroove.Sync.Api.Tests/DailyGroove.Sync.Api.Tests.csproj" />
   <Project Path="DailyGroove.Sync.Api/DailyGroove.Sync.Api.csproj" />
   <Project Path="DailyGroove.Sync.Contracts/DailyGroove.Sync.Contracts.csproj" />

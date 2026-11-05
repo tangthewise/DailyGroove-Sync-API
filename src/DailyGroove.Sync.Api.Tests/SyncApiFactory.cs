@@ -16,7 +16,7 @@ public sealed class SyncApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = $"DailyGrooveSync_Test_{Guid.NewGuid():N}";
 
-    private string ConnectionString =>
+    public string ConnectionString =>
         $"Server=(localdb)\\MSSQLLocalDB;Database={_databaseName};Integrated Security=true;TrustServerCertificate=true";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -56,9 +56,10 @@ public static class SyncClientExtensions
         return (await response.Content.ReadFromJsonAsync<PushResponse>())!;
     }
 
-    public static async Task<PullResponse> PullOkAsync(this HttpClient client, Guid userId, long since = 0)
+    public static async Task<PullResponse> PullOkAsync(this HttpClient client, Guid userId, long since = 0, int? limit = null)
     {
-        var response = await client.GetAsync($"/sync/pull?userId={userId}&since={since}");
+        var limitQuery = limit is null ? "" : $"&limit={limit}";
+        var response = await client.GetAsync($"/sync/pull?userId={userId}&since={since}{limitQuery}");
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<PullResponse>())!;
     }
