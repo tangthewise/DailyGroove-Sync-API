@@ -211,9 +211,17 @@ public sealed class AttackTests : IClassFixture<SyncApiFactory>
     [Trait("Stage", "SecretsHygiene")]
     public void Database_password_is_not_committed_in_appsettings_json()
     {
-        var appsettings = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "appsettings.json"));
+        // Every appsettings*.json, so moving the password to appsettings.Development.json can't turn
+        // this green. (Secret scanning in the pipeline is the real control; this is the tripwire.)
+        var files = Directory.GetFiles(AppContext.BaseDirectory, "appsettings*.json");
+        Check.That(files).Not.IsEmpty();
 
-        Check.That(appsettings).Not.Contains("Password=");
-        Check.That(appsettings).Not.Contains("User Id=sa");
+        foreach (var file in files)
+        {
+            var text = File.ReadAllText(file);
+            Check.WithCustomMessage($"{Path.GetFileName(file)} must not contain a password").That(text).Not.Contains("Password=");
+            Check.WithCustomMessage($"{Path.GetFileName(file)} must not contain a password").That(text).Not.Contains("Pwd=");
+            Check.WithCustomMessage($"{Path.GetFileName(file)} must not use the sa login").That(text).Not.Contains("User Id=sa");
+        }
     }
 }

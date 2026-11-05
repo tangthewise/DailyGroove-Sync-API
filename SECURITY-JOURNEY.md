@@ -15,8 +15,8 @@ The tests become permanent regression tests.
 
 | Stage | Topic | Test trait (`-trait "Stage=…"`) | Status |
 |---|---|---|---|
-| 0 | Baseline sync API (insecure on purpose) | — | ✅ Built. 10 sync tests green (7 protocol + 3 correctness); 12 security tests deliberately RED |
-| Gate | Secrets hygiene (part A): no committed password | `SecretsHygiene` | ⏳ Next |
+| 0 | Baseline sync API (insecure on purpose) | — | ✅ Built. 10 sync tests green (7 protocol + 3 correctness); 12 security tests deliberately RED (as at the baseline tag) |
+| Gate | Secrets hygiene (part A): no committed password | `SecretsHygiene` | ✅ Done — 11 security tests still RED, 10 sync tests green |
 | 1 | Threat model | — (document) | ⏳ |
 | 2 | Authentication | `Authentication` | ⏳ |
 | 3 | Object-level authorization | `ObjectAuthorization` | ⏳ |
@@ -90,13 +90,34 @@ PortSwigger topic pages: [Authentication](https://portswigger.net/web-security/a
 - AI security (SC-500 domain 3) isn't covered; see "Possible later stages" below.
 
 ### Gate and Stage 7 study order (secrets)
-1. [Manage secrets in your server apps with Azure Key Vault](https://learn.microsoft.com/training/modules/manage-secrets-with-azure-key-vault/)
-2. [Implement managed identities](https://learn.microsoft.com/training/modules/implement-managed-identities/)
-3. [Implement Azure Key Vault](https://learn.microsoft.com/training/modules/implement-azure-key-vault/)
-4. [Configure and manage secrets in Azure Key Vault](https://learn.microsoft.com/training/modules/configure-and-manage-azure-key-vault/)
-5. Docs for the fix: [app secrets in development](https://learn.microsoft.com/aspnet/core/security/app-secrets),
+Links checked against the live Microsoft Learn catalogue on 2026-11-05. Four older modules (*Manage secrets
+in your server apps with Azure Key Vault*, *Implement Azure Key Vault*, *Implement managed identities*,
+*Configure and manage secrets in Azure Key Vault*) have been retired: their URLs redirect to generic pages,
+although Learn's search index still lists them. Use these instead:
+
+1. [Best practices for protecting secrets](https://learn.microsoft.com/azure/security/fundamentals/secrets-best-practices)
+   — the Gate lesson in one article: audit, avoid hardcoding, secret scanning, and "treat any secret found by
+   scanning as compromised: revoke and replace".
+2. [Managed identities for Azure resources — overview](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview)
+   (system- vs user-assigned, how tokens are obtained).
+3. [Tutorial: use Key Vault with an Azure web app in .NET](https://learn.microsoft.com/azure/key-vault/general/tutorial-net-create-vault-azure-web-app)
+   — .NET, managed identity, `DefaultAzureCredential`; needs a free Azure subscription.
+4. Module: [Manage application secrets with Azure Key Vault](https://learn.microsoft.com/training/modules/manage-app-secrets-key-vault/)
+   (intermediate, 8 units, about 74 min). Its exercise uses the Python SDK and AI-solution examples, but the
+   concepts — retrieval with managed identity, versioning and rotation, caching — carry over to .NET.
+5. Module: [Implement access management for Azure resources](https://learn.microsoft.com/training/modules/implement-access-management-for-azure-resources/)
+   (advanced, 10 units) — managed identities plus Key Vault RBAC; SC-500 identity domain.
+6. Learning path: [Secure Azure Key Vault with defense in depth for the cloud and AI workloads](https://learn.microsoft.com/training/paths/configure-key-vault-security/)
+   (4 modules: *Configure and secure Azure Key Vault*; *Manage keys and secrets*; *Manage certificates and
+   monitor*; *Protect Key Vault with Defender for Cloud*). This is the SC-500 "Secure secrets and keys by using
+   Azure Key Vault" block almost line for line. It assumes you already know Key Vault, RBAC and managed
+   identities, so do items 1–5 first. Best done around Stage 7.
+7. Docs for the fix: [app secrets in development](https://learn.microsoft.com/aspnet/core/security/app-secrets),
    [passwordless Azure SQL](https://learn.microsoft.com/azure/azure-sql/database/azure-sql-dotnet-quickstart),
    [Secure your Key Vault](https://learn.microsoft.com/azure/key-vault/general/secure-key-vault)
+   *(these three are ordinary docs articles; not re-checked in the 2026-11-05 pass)*.
+
+The Gate itself needs only items 1 and 7 (user secrets). Items 2–6 are the Stage 7 groundwork.
 
 ---
 
@@ -159,12 +180,41 @@ Locally, until then: run `-class DailyGroove.Sync.Api.Tests.SyncHappyPathTests`,
 ## Stage 0 — Baseline
 
 **State:** a working sync API with eight known flaws (catalogued in `src/README.md`).
-**Proof the flaws exist:** `AttackTests` — 11 tests that assert the protected behaviour and therefore
+**Proof the flaws exist:** 12 tests (11 in `AttackTests`, 1 in `AbuseLimitTests`) that assert the protected behaviour and therefore
 **fail** against the baseline. Tagged by stage (`-trait "Stage=…"`): Authentication (1),
-ObjectAuthorization (2), MassAssignmentAndValidation (3), Configuration (3), AbuseLimits (1),
+ObjectAuthorization (3), MassAssignmentAndValidation (3), Configuration (3), AbuseLimits (1),
 SecretsHygiene (1).
 **Proof the sync works:** `SyncHappyPathTests` — 7 tests (push/pull round trip, cursor, tombstones,
 last-write-wins both ways, per-user pull).
+
+## Gate — Secrets hygiene (part A)
+
+**Risk:** a database credential committed in `appsettings.json`. **OWASP:** API8:2023 Security
+Misconfiguration. **CWE:** CWE-798 (hard-coded credentials).
+**Study:** [Best practices for protecting secrets](https://learn.microsoft.com/azure/security/fundamentals/secrets-best-practices);
+[app secrets in development](https://learn.microsoft.com/aspnet/core/security/app-secrets); PortSwigger
+[Information disclosure](https://portswigger.net/web-security/information-disclosure).
+**Attack test:** `Database_password_is_not_committed_in_appsettings_json` (trait `SecretsHygiene`). It scans
+every `appsettings*.json` in the output folder for `Password=`, `Pwd=` and `User Id=sa`, so moving the
+password to `appsettings.Development.json` can't turn it green.
+**Before:** tag `stage-0-baseline` — `appsettings.json` held `User Id=sa;Password=<placeholder>`. The test
+failed with `appsettings.json must not contain a password`.
+**Fix:** the local connection string now uses Windows authentication to LocalDB
+(`Integrated Security=true`), the same server the tests use. There is no credential in the file at all, so
+nothing needs hiding. If a real password is ever needed locally, use `dotnet user-secrets` (or an
+environment variable), never a committed file.
+**After:** the test passes; the 10 sync tests still pass; the 11 other security tests remain red.
+Tag `stage-gate-secrets` (to be created by the repo owner after committing).
+**What I learned / still open:**
+- **Deleting a secret from the current file does not remove it from Git history.** The baseline placeholder
+  is still in history (commit `c9ab3d0`, and so in the `stage-0-baseline` tag). That is harmless here because
+  it was a throwaway value, never used anywhere else. If it had been real, the fix would be to **rotate it**
+  (treat it as compromised, replace it), not just delete it.
+- Do not rewrite history to hide it: the before/after story is the point of this repo.
+- The test is a tripwire, not a control. The real control is secret scanning in the pipeline (Stage 8), plus
+  watching for GitHub push protection firing on the first public push (record that here when it happens).
+- Part B (no password at all in production: managed identity, Key Vault, migrations out of startup) belongs
+  to Stage 7.
 
 ### Sync-correctness fixes made in the baseline
 These bugs have nothing to do with the deliberate flaws, so they were fixed here to avoid carrying them

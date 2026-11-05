@@ -5,7 +5,7 @@
 > and then fixed **in place**, one stage at a time (see `../SECURITY-JOURNEY.md`; each stage's
 > end state is a git tag, starting with `stage-0-baseline`). **Never run it on a public network
 > or with real data** until the journey says the relevant stages are done. The password in
-> `appsettings.json` is a fake placeholder for demonstration.
+> `appsettings.json` has no credentials: the local connection string uses Windows authentication to LocalDB.
 
 A local-first sync API for Daily Groove: ASP.NET Core minimal API (.NET 10), EF Core + SQL Server.
 
